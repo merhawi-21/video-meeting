@@ -22,9 +22,24 @@ export default function App() {
       width: "100%",
       parentNode: container,
 
-      // HD VIDEO MODE
+      // ============ UNLIMITED MEETING + HD SETTINGS ============
       configOverwrite: {
         prejoinPageEnabled: false,
+
+        // NO TIME LIMIT + NO AUTO-DISCONNECT
+        enableClosePage: false,
+        enableForcedReload: false,
+        deploymentInfo: { allowThirdPartyRequests: true },
+        analytics: false,
+        inactivity_timeout: 0,
+        startAudioMuted: 0,
+        startVideoMuted: 0,
+        disableModeratorIndicator: false,
+        enableLobby: false,
+
+        p2p: { enabled: true },
+
+        // HD VIDEO (1080p)
         resolution: 1080,
         constraints: {
           video: {
@@ -35,6 +50,7 @@ export default function App() {
             },
           },
         },
+
         startWithAudioMuted: true,
         startWithVideoMuted: true,
       },
@@ -100,7 +116,7 @@ export default function App() {
       {/* HEADER */}
       <header className="p-6 bg-white/70 dark:bg-slate-800/60 backdrop-blur-xl shadow-lg flex flex-col md:flex-row md:justify-between md:items-center gap-4 border-b border-gray-200 dark:border-slate-700">
         <h1 className="text-3xl font-extrabold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
-          HD Video Meeting
+          HD Video Meeting (Unlimited)
         </h1>
 
         <div className="flex items-center gap-3">
@@ -143,10 +159,10 @@ export default function App() {
       {!currentRoom && (
         <section className="flex flex-col justify-center items-center flex-1 px-6 text-center space-y-5 animate-fadeIn">
           <h2 className="text-5xl md:text-6xl font-extrabold tracking-tight">
-            HD Video Meetings, Instantly
+            Unlimited HD Video Meetings
           </h2>
           <p className="text-lg md:text-xl max-w-2xl text-gray-700 dark:text-gray-300">
-            Create or join a high-quality video meeting. No account required.
+            Create or join a high-quality meeting. No limits. No accounts.
           </p>
           <button
             onClick={startMeeting}
