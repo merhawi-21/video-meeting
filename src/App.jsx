@@ -115,7 +115,7 @@ export default function App() {
     >
       {/* HEADER */}
       <header className="p-6 bg-white/70 dark:bg-slate-800/60 backdrop-blur-xl shadow-lg flex flex-col md:flex-row md:justify-between md:items-center gap-4 border-b border-gray-200 dark:border-slate-700">
-        <h1 className="text-3xl font-extrabold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
+        <h1 className="text-3xl font-extrabold bg-linear-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
           HD Video Meeting (Unlimited)
         </h1>
 
@@ -123,7 +123,7 @@ export default function App() {
           {/* Start */}
           <button
             onClick={startMeeting}
-            className="px-6 py-3 bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-xl text-lg shadow hover:scale-105 active:scale-95 transition"
+            className="px-6 py-3 bg-linear-to-r from-blue-600 to-blue-700 text-white rounded-xl text-lg shadow hover:scale-105 active:scale-95 transition"
           >
             Start
           </button>
@@ -166,7 +166,7 @@ export default function App() {
           </p>
           <button
             onClick={startMeeting}
-            className="mt-2 px-10 py-4 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-2xl text-xl shadow-lg hover:scale-105 active:scale-95 transition"
+            className="mt-2 px-10 py-4 bg-linear-to-r from-blue-600 to-purple-600 text-white rounded-2xl text-xl shadow-lg hover:scale-105 active:scale-95 transition"
           >
             Start Now
           </button>
