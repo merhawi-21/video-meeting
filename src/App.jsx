@@ -4,116 +4,182 @@ export default function App() {
   const [roomId, setRoomId] = useState("");
   const [currentRoom, setCurrentRoom] = useState(null);
   const [darkMode, setDarkMode] = useState(false);
+  const [toast, setToast] = useState("");
 
+  // Load Jitsi
   useEffect(() => {
-    // Auto-join if URL has ?room=
-    const params = new URLSearchParams(window.location.search);
-    const roomFromUrl = params.get("room");
-    if (roomFromUrl) {
-      setRoomId(roomFromUrl);
-      joinMeeting(roomFromUrl);
+    if (!currentRoom) return;
+    const container = document.getElementById("video-container");
+    if (!container) return;
+
+    container.innerHTML = "";
+
+    const domain = "meet.jit.si";
+
+    const options = {
+      roomName: currentRoom,
+      height: "100%",
+      width: "100%",
+      parentNode: container,
+
+      // HD VIDEO MODE
+      configOverwrite: {
+        prejoinPageEnabled: false,
+        resolution: 1080,
+        constraints: {
+          video: {
+            height: {
+              ideal: 1080,
+              max: 1080,
+              min: 720,
+            },
+          },
+        },
+        startWithAudioMuted: true,
+        startWithVideoMuted: true,
+      },
+
+      interfaceConfigOverwrite: {
+        SHOW_JITSI_WATERMARK: false,
+        SHOW_BRAND_WATERMARK: false,
+        TOOLBAR_BUTTONS: [
+          "microphone",
+          "camera",
+          "desktop",
+          "fullscreen",
+          "hangup",
+          "chat",
+          "settings",
+          "raisehand",
+        ],
+        DEFAULT_BACKGROUND: darkMode ? "#0f172a" : "#ffffff",
+      },
+    };
+
+    const initJitsi = () => new window.JitsiMeetExternalAPI(domain, options);
+
+    if (!window.JitsiMeetExternalAPI) {
+      const script = document.createElement("script");
+      script.src = "https://meet.jit.si/external_api.js";
+      script.onload = initJitsi;
+      document.body.appendChild(script);
+    } else {
+      initJitsi();
     }
+  }, [currentRoom, darkMode]);
+
+  // Auto-join via URL
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const room = params.get("room");
+    if (room) setCurrentRoom(room);
   }, []);
 
-  const startMeeting = () => {
-    const id = "room_" + Math.random().toString(36).substring(2, 10);
-    setCurrentRoom(id);
-    loadJitsi(id);
-  };
+  const startMeeting = () =>
+    setCurrentRoom("room_" + Math.random().toString(36).substring(2, 10));
 
-  const joinMeeting = (id) => {
-    const joinId = id || roomId;
-    if (!joinId) return;
-    setCurrentRoom(joinId);
-    loadJitsi(joinId);
-  };
-
-  const loadJitsi = (roomName) => {
-    const domain = "meet.jit.si";
-    const options = {
-      roomName,
-      width: "100%",
-      height: "100%",
-      parentNode: document.getElementById("video-container"),
-    };
-    new window.JitsiMeetExternalAPI(domain, options);
+  const joinMeeting = () => {
+    if (roomId.trim()) setCurrentRoom(roomId.trim());
   };
 
   const copyRoomLink = () => {
     if (!currentRoom) return;
     const link = `${window.location.origin}?room=${currentRoom}`;
-    navigator.clipboard.writeText(link);
-    alert("Room link copied to clipboard!");
+    navigator.clipboard.writeText(link).then(() => {
+      setToast("Room link copied!");
+      setTimeout(() => setToast(""), 2400);
+    });
   };
 
   return (
     <div
       className={`${
         darkMode ? "dark" : ""
-      } h-screen w-screen flex flex-col bg-gray-100 dark:bg-gray-900 text-gray-900 dark:text-gray-100`}
+      } h-screen w-screen flex flex-col bg-gray-50 dark:bg-slate-900 text-gray-900 dark:text-gray-100 transition`}
     >
-      {/* Header with buttons */}
-      <header className="p-6 bg-white dark:bg-gray-800 shadow flex flex-col md:flex-row md:justify-between md:items-center space-y-4 md:space-y-0">
-        <h1 className="text-2xl md:text-3xl font-bold">🌐 My Video Meeting</h1>
-        <div className="flex items-center space-x-3">
+      {/* HEADER */}
+      <header className="p-6 bg-white/70 dark:bg-slate-800/60 backdrop-blur-xl shadow-lg flex flex-col md:flex-row md:justify-between md:items-center gap-4 border-b border-gray-200 dark:border-slate-700">
+        <h1 className="text-3xl font-extrabold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
+          HD Video Meeting
+        </h1>
+
+        <div className="flex items-center gap-3">
+          {/* Start */}
           <button
             onClick={startMeeting}
-            className="px-6 py-3 bg-blue-600 text-white rounded-xl text-lg hover:bg-blue-700 transition"
+            className="px-6 py-3 bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-xl text-lg shadow hover:scale-105 active:scale-95 transition"
           >
-            Start Meeting
+            Start
           </button>
+
+          {/* Room Input */}
           <input
             type="text"
             placeholder="Room ID"
             value={roomId}
             onChange={(e) => setRoomId(e.target.value)}
-            className="px-4 py-2 border rounded-lg w-32 md:w-48 bg-white dark:bg-gray-700 border-gray-300 dark:border-gray-600 text-gray-900 dark:text-gray-100"
+            className="px-4 py-2 rounded-xl w-40 md:w-52 border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-700 placeholder-gray-500 dark:placeholder-gray-300 focus:ring-2 focus:ring-blue-500 transition"
           />
+
+          {/* Join */}
           <button
-            onClick={() => joinMeeting()}
-            className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition"
+            onClick={joinMeeting}
+            className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-xl shadow hover:scale-105 active:scale-95 transition"
           >
             Join
           </button>
+
+          {/* Dark Mode */}
           <button
             onClick={() => setDarkMode(!darkMode)}
-            className="px-4 py-2 bg-gray-300 dark:bg-gray-700 text-gray-900 dark:text-gray-100 rounded-lg hover:bg-gray-400 dark:hover:bg-gray-600 transition"
+            className="px-4 py-2 bg-gray-200 dark:bg-slate-700 rounded-xl hover:scale-105 active:scale-95 transition"
           >
-            {darkMode ? "Light Mode" : "Dark Mode"}
+            {darkMode ? "☀️" : "🌙"}
           </button>
         </div>
       </header>
 
-      {/* Hero Section */}
+      {/* HERO SECTION */}
       {!currentRoom && (
-        <section className="flex flex-col justify-center items-center flex-1 text-center px-6 md:px-20 space-y-4">
-          <h2 className="text-3xl md:text-5xl font-bold">Host or Join a Video Meeting Instantly</h2>
-          <p className="text-gray-700 dark:text-gray-300 text-lg md:text-xl max-w-2xl">
-            No sign-up required. Start a meeting, share a room link, and collaborate in real-time.
+        <section className="flex flex-col justify-center items-center flex-1 px-6 text-center space-y-5 animate-fadeIn">
+          <h2 className="text-5xl md:text-6xl font-extrabold tracking-tight">
+            HD Video Meetings, Instantly
+          </h2>
+          <p className="text-lg md:text-xl max-w-2xl text-gray-700 dark:text-gray-300">
+            Create or join a high-quality video meeting. No account required.
           </p>
           <button
             onClick={startMeeting}
-            className="mt-4 px-8 py-4 bg-blue-600 text-white rounded-xl text-lg hover:bg-blue-700 transition"
+            className="mt-2 px-10 py-4 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-2xl text-xl shadow-lg hover:scale-105 active:scale-95 transition"
           >
-            Start a Meeting Now
+            Start Now
           </button>
         </section>
       )}
 
-      {/* Video Container */}
+      {/* VIDEO AREA */}
       {currentRoom && (
-        <main id="video-container" className="flex-1 min-h-[500px]"></main>
+        <main
+          id="video-container"
+          className="flex-1 min-h-[500px] bg-gray-200 dark:bg-slate-800 rounded-xl shadow-inner m-4 overflow-hidden"
+        ></main>
       )}
 
-      {/* Copy Room Link Button */}
+      {/* FOOTER */}
       {currentRoom && (
-        <footer className="p-4 bg-white dark:bg-gray-800 shadow flex justify-center">
+        <footer className="p-5 bg-white/70 dark:bg-slate-800/60 backdrop-blur-xl shadow-md flex justify-center border-t border-gray-200 dark:border-slate-700 relative">
           <button
             onClick={copyRoomLink}
-            className="px-6 py-3 bg-yellow-500 text-white rounded-xl hover:bg-yellow-600 transition"
+            className="px-6 py-3 bg-yellow-500 text-white rounded-xl shadow hover:scale-105 active:scale-95 transition"
           >
-            Copy Room Link
+            Copy Link
           </button>
+
+          {toast && (
+            <span className="absolute top-2 right-4 bg-black/80 text-white px-4 py-2 rounded-xl text-sm animate-fadeIn">
+              {toast}
+            </span>
+          )}
         </footer>
       )}
     </div>
