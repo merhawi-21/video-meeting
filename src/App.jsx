@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useEffect, useRef, useState } from "react";
 
 export default function App() {
   const [roomId, setRoomId] = useState("");
@@ -6,90 +6,97 @@ export default function App() {
   const [darkMode, setDarkMode] = useState(false);
   const [toast, setToast] = useState("");
 
-  // Load Jitsi
+  const localVideo = useRef(null);
+  const remoteVideo = useRef(null);
+  const peerConnection = useRef(null);
+  const ws = useRef(null);
+
+  // HD video constraints
+  const videoConfig = {
+    video: {
+      width: { ideal: 1920 },
+      height: { ideal: 1080 },
+      frameRate: { ideal: 30 },
+    },
+    audio: true,
+  };
+
+  // Start WebRTC after joining a room
   useEffect(() => {
     if (!currentRoom) return;
-    const container = document.getElementById("video-container");
-    if (!container) return;
 
-    container.innerHTML = "";
+    ws.current = new WebSocket("ws://localhost:3001"); // <=== your signaling server
+    ws.current.onopen = () => ws.current.send(JSON.stringify({ join: currentRoom }));
+    ws.current.onmessage = handleSignal;
 
-    const domain = "meet.jit.si";
+    startLocalVideo();
+  }, [currentRoom]);
 
-    const options = {
-      roomName: currentRoom,
-      height: "100%",
-      width: "100%",
-      parentNode: container,
+  // Handle WebSocket messages
+  const handleSignal = async (msg) => {
+    const data = JSON.parse(msg.data);
+    if (!peerConnection.current) await createPeerConnection();
 
-      // ============ UNLIMITED MEETING + HD SETTINGS ============
-      configOverwrite: {
-        prejoinPageEnabled: false,
+    if (data.offer) {
+      await peerConnection.current.setRemoteDescription(data.offer);
+      const answer = await peerConnection.current.createAnswer();
+      await peerConnection.current.setLocalDescription(answer);
 
-        // NO TIME LIMIT + NO AUTO-DISCONNECT
-        enableClosePage: false,
-        enableForcedReload: false,
-        deploymentInfo: { allowThirdPartyRequests: true },
-        analytics: false,
-        inactivity_timeout: 0,
-        startAudioMuted: 0,
-        startVideoMuted: 0,
-        disableModeratorIndicator: false,
-        enableLobby: false,
+      ws.current.send(JSON.stringify({ answer, room: currentRoom }));
+    }
 
-        p2p: { enabled: true },
+    if (data.answer) {
+      await peerConnection.current.setRemoteDescription(data.answer);
+    }
 
-        // HD VIDEO (1080p)
-        resolution: 1080,
-        constraints: {
-          video: {
-            height: {
-              ideal: 1080,
-              max: 1080,
-              min: 720,
-            },
-          },
-        },
+    if (data.iceCandidate) {
+      await peerConnection.current.addIceCandidate(data.iceCandidate);
+    }
+  };
 
-        startWithAudioMuted: true,
-        startWithVideoMuted: true,
-      },
+  // Local video
+  const startLocalVideo = async () => {
+    const stream = await navigator.mediaDevices.getUserMedia(videoConfig);
+    localVideo.current.srcObject = stream;
 
-      interfaceConfigOverwrite: {
-        SHOW_JITSI_WATERMARK: false,
-        SHOW_BRAND_WATERMARK: false,
-        TOOLBAR_BUTTONS: [
-          "microphone",
-          "camera",
-          "desktop",
-          "fullscreen",
-          "hangup",
-          "chat",
-          "settings",
-          "raisehand",
-        ],
-        DEFAULT_BACKGROUND: darkMode ? "#0f172a" : "#ffffff",
-      },
+    if (peerConnection.current) {
+      stream.getTracks().forEach((track) =>
+        peerConnection.current.addTrack(track, stream)
+      );
+    }
+  };
+
+  // Create peer connection
+  const createPeerConnection = async () => {
+    peerConnection.current = new RTCPeerConnection({
+      iceServers: [{ urls: "stun:stun.l.google.com:19302" }],
+    });
+
+    peerConnection.current.onicecandidate = (e) => {
+      if (e.candidate) {
+        ws.current.send(
+          JSON.stringify({ iceCandidate: e.candidate, room: currentRoom })
+        );
+      }
     };
 
-    const initJitsi = () => new window.JitsiMeetExternalAPI(domain, options);
+    peerConnection.current.ontrack = (e) => {
+      remoteVideo.current.srcObject = e.streams[0];
+    };
 
-    if (!window.JitsiMeetExternalAPI) {
-      const script = document.createElement("script");
-      script.src = "https://meet.jit.si/external_api.js";
-      script.onload = initJitsi;
-      document.body.appendChild(script);
-    } else {
-      initJitsi();
+    // Add local tracks if already available
+    if (localVideo.current?.srcObject) {
+      localVideo.current.srcObject.getTracks().forEach((track) =>
+        peerConnection.current.addTrack(track, localVideo.current.srcObject)
+      );
     }
-  }, [currentRoom, darkMode]);
 
-  // Auto-join via URL
-  useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    const room = params.get("room");
-    if (room) setCurrentRoom(room);
-  }, []);
+    // Send offer
+    const offer = await peerConnection.current.createOffer();
+    await peerConnection.current.setLocalDescription(offer);
+
+    ws.current.send(JSON.stringify({ offer, room: currentRoom }));
+  };
 
   const startMeeting = () =>
     setCurrentRoom("room_" + Math.random().toString(36).substring(2, 10));
@@ -102,99 +109,70 @@ export default function App() {
     if (!currentRoom) return;
     const link = `${window.location.origin}?room=${currentRoom}`;
     navigator.clipboard.writeText(link).then(() => {
-      setToast("Room link copied!");
-      setTimeout(() => setToast(""), 2400);
+      setToast("Link copied!");
+      setTimeout(() => setToast(""), 2000);
     });
   };
 
   return (
-    <div
-      className={`${
-        darkMode ? "dark" : ""
-      } h-screen w-screen flex flex-col bg-gray-50 dark:bg-slate-900 text-gray-900 dark:text-gray-100 transition`}
-    >
+    <div className={`${darkMode ? "dark" : ""} h-screen w-screen flex flex-col bg-gray-50 dark:bg-slate-900 text-gray-900 dark:text-gray-100`}>
       {/* HEADER */}
-      <header className="p-6 bg-white/70 dark:bg-slate-800/60 backdrop-blur-xl shadow-lg flex flex-col md:flex-row md:justify-between md:items-center gap-4 border-b border-gray-200 dark:border-slate-700">
-        <h1 className="text-3xl font-extrabold bg-linear-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
-          HD Video Meeting (Unlimited)
-        </h1>
+      <header className="p-6 bg-white/60 dark:bg-slate-800/60 shadow flex justify-between">
+        <h1 className="text-3xl font-bold">HD WebRTC Meeting</h1>
 
-        <div className="flex items-center gap-3">
-          {/* Start */}
-          <button
-            onClick={startMeeting}
-            className="px-6 py-3 bg-linear-to-r from-blue-600 to-blue-700 text-white rounded-xl text-lg shadow hover:scale-105 active:scale-95 transition"
-          >
+        <div className="flex gap-3">
+          <button onClick={startMeeting} className="px-6 py-2 bg-blue-600 text-white rounded-xl">
             Start
           </button>
 
-          {/* Room Input */}
           <input
             type="text"
             placeholder="Room ID"
             value={roomId}
             onChange={(e) => setRoomId(e.target.value)}
-            className="px-4 py-2 rounded-xl w-40 md:w-52 border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-700 placeholder-gray-500 dark:placeholder-gray-300 focus:ring-2 focus:ring-blue-500 transition"
+            className="px-4 py-2 rounded-xl"
           />
 
-          {/* Join */}
-          <button
-            onClick={joinMeeting}
-            className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-xl shadow hover:scale-105 active:scale-95 transition"
-          >
+          <button onClick={joinMeeting} className="px-4 py-2 bg-green-600 text-white rounded-xl">
             Join
           </button>
 
-          {/* Dark Mode */}
-          <button
-            onClick={() => setDarkMode(!darkMode)}
-            className="px-4 py-2 bg-gray-200 dark:bg-slate-700 rounded-xl hover:scale-105 active:scale-95 transition"
-          >
+          <button onClick={() => setDarkMode(!darkMode)} className="px-4 py-2 bg-gray-300 dark:bg-slate-700 rounded-xl">
             {darkMode ? "☀️" : "🌙"}
           </button>
         </div>
       </header>
 
-      {/* HERO SECTION */}
+      {/* HERO */}
       {!currentRoom && (
-        <section className="flex flex-col justify-center items-center flex-1 px-6 text-center space-y-5 animate-fadeIn">
-          <h2 className="text-5xl md:text-6xl font-extrabold tracking-tight">
-            Unlimited HD Video Meetings
-          </h2>
-          <p className="text-lg md:text-xl max-w-2xl text-gray-700 dark:text-gray-300">
-            Create or join a high-quality meeting. No limits. No accounts.
-          </p>
-          <button
-            onClick={startMeeting}
-            className="mt-2 px-10 py-4 bg-linear-to-r from-blue-600 to-purple-600 text-white rounded-2xl text-xl shadow-lg hover:scale-105 active:scale-95 transition"
-          >
-            Start Now
-          </button>
-        </section>
+        <div className="flex flex-col justify-center items-center flex-1">
+          <h2 className="text-5xl font-bold">Unlimited HD Meetings</h2>
+          <p className="text-xl mt-4">Peer-to-peer WebRTC. No limit. No watermark.</p>
+        </div>
       )}
 
       {/* VIDEO AREA */}
       {currentRoom && (
-        <main
-          id="video-container"
-          className="flex-1 min-h-[500px] bg-gray-200 dark:bg-slate-800 rounded-xl shadow-inner m-4 overflow-hidden"
-        ></main>
+        <div className="flex-1 grid grid-cols-2 gap-4 p-4">
+          <video ref={localVideo} autoPlay playsInline muted className="rounded-xl border" />
+          <video ref={remoteVideo} autoPlay playsInline className="rounded-xl border" />
+        </div>
       )}
 
       {/* FOOTER */}
       {currentRoom && (
-        <footer className="p-5 bg-white/70 dark:bg-slate-800/60 backdrop-blur-xl shadow-md flex justify-center border-t border-gray-200 dark:border-slate-700 relative">
+        <footer className="p-4 bg-white/60 dark:bg-slate-800/60 text-center relative">
           <button
             onClick={copyRoomLink}
-            className="px-6 py-3 bg-yellow-500 text-white rounded-xl shadow hover:scale-105 active:scale-95 transition"
+            className="px-6 py-2 bg-yellow-500 text-white rounded-xl shadow"
           >
             Copy Link
           </button>
 
           {toast && (
-            <span className="absolute top-2 right-4 bg-black/80 text-white px-4 py-2 rounded-xl text-sm animate-fadeIn">
+            <div className="absolute right-5 top-2 bg-black text-white px-4 py-2 rounded">
               {toast}
-            </span>
+            </div>
           )}
         </footer>
       )}
